@@ -1,5 +1,3 @@
-import 'package:cronograma/data/models/turma_com_nomes.dart';
-
 import '../../data/models/turma_model.dart';
 import '../../data/repositories/turma_repository.dart';
 
@@ -16,7 +14,7 @@ class TurmaViewModel {
     return await repository.getTurmas();
   }
 
-  Future<List<TurmaComNomes>> getTurmasNomes() async {
+  Future<List<Turma>> getTurmasNomes() async {
     return await repository.getTurmasNomes();
   }
 

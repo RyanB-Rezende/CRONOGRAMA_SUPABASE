@@ -1,6 +1,6 @@
 import 'package:cronograma/core/supabase_helper.dart';
 import '../models/turma_model.dart';
-import '../models/turma_com_nomes.dart';
+import 'dart:convert';
 
 class TurmaRepository {
   // Inserir turma
@@ -23,13 +23,19 @@ class TurmaRepository {
   }
 
   // Obter turmas com nomes de curso, instrutor e turno
-  Future<List<TurmaComNomes>> getTurmasNomes() async {
+  Future<List<Turma>> getTurmasNomes() async {
     try {
-      final response = await SupabaseHelper.client.from('turma').select(
-          '*, cursos(nomecurso), instrutores(nomeinstrutor), turno(turno)');
+      final response = await SupabaseHelper.client
+          .from('turma')
+          .select('*, cursos(*), instrutores(*), turno(*), aula(*)');
 
-      return (response as List)
-          .map((map) => TurmaComNomes.fromMap(map))
+      print(
+          'Response formatado: ${const JsonEncoder.withIndent('  ').convert(response)}');
+
+      final data = response as List<dynamic>;
+
+      return data
+          .map((map) => Turma.fromMap(map as Map<String, dynamic>))
           .toList();
     } catch (e) {
       throw Exception('Erro ao buscar turmas com nomes: $e');

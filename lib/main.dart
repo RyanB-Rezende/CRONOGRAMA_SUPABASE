@@ -70,7 +70,7 @@ class MyApp extends StatelessWidget {
       // Rotas nomeadas
       routes: {
         '/cadatro': (context) => const CadastroInstrutorPage(),
-        // '/cronograma': (context) => const CronogramaPage(),
+        '/cronograma': (context) => const CronogramaPage(),
       },
 
       locale: const Locale('pt', 'BR'),

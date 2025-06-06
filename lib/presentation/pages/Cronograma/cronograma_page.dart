@@ -1,6 +1,9 @@
 // ignore_for_file: use_build_context_synchronously, avoid_print, non_constant_identifier_names, library_private_types_in_public_api
 
 import 'package:cronograma/data/models/aula_model.dart';
+import 'package:cronograma/data/models/turma_model.dart';
+import 'package:cronograma/data/repositories/turma_repository.dart';
+import 'package:cronograma/presentation/viewmodels/turma_viewmodels.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
@@ -30,9 +33,10 @@ class _CronogramaPageState extends State<CronogramaPage> {
   final Map<DateTime, String> _feriadosMunicipais = {};
   bool _isLoading = true;
   final Map<int, int> _cargaHorariaUc = {};
-  List<Map<String, dynamic>> _turmas = [];
+  List<Turma> _turmas = [];
   List<Map<String, dynamic>> _cursos = [];
   int? _selectedTurmaId;
+  final TurmaViewModel _viewModel = TurmaViewModel(TurmaRepository());
 
   final Map<String, Map<String, dynamic>> _periodoConfig = {
     'Matutino': {
@@ -130,11 +134,10 @@ class _CronogramaPageState extends State<CronogramaPage> {
 
   Future<void> _carregarTurmas() async {
     try {
-      final response = await Supabase.instance.client.from('Turma').select();
-
+      final turmas = await _viewModel.getTurmasNomes();
       if (mounted) {
         setState(() {
-          _turmas = response;
+          _turmas = turmas;
         });
       }
     } catch (e) {
@@ -352,182 +355,182 @@ class _CronogramaPageState extends State<CronogramaPage> {
     }
   }
 
-  Future<void> _imprimirCronogramaWindows() async {
-    final pdf = pw.Document();
+  // Future<void> _imprimirCronogramaWindows() async {
+  //   final pdf = pw.Document();
 
-    final turmaInfo = _selectedTurmaId != null
-        ? _turmas.firstWhere((t) => t['idTurma'] == _selectedTurmaId)
-        : null;
+  //   final turmaInfo = _selectedTurmaId != null
+  //       ? _turmas.firstWhere((t) => t.idturma == _selectedTurmaId)
+  //       : null;
 
-    String nomeCurso = 'Não especificado';
-    if (turmaInfo != null && turmaInfo['idCurso'] != null) {
-      try {
-        final response = await Supabase.instance.client
-            .from('Cursos')
-            .select('nomecurso')
-            .eq('idcurso', turmaInfo['idCurso'])
-            .limit(1)
-            .single();
+  //   String nomeCurso = 'Não especificado';
+  //   if (turmaInfo != null && turmaInfo.idcurso != null) {
+  //     try {
+  //       final response = await Supabase.instance.client
+  //           .from('Cursos')
+  //           .select('nomecurso')
+  //           .eq('idcurso', turmaInfo.cursos!.idcurso!)
+  //           .limit(1)
+  //           .single();
 
-        nomeCurso = response['nomecurso'] as String;
-      } catch (e) {
-        print('Erro ao buscar curso no Supabase: $e');
-      }
-    }
+  //       nomeCurso = response['nomecurso'] as String;
+  //     } catch (e) {
+  //       print('Erro ao buscar curso no Supabase: $e');
+  //     }
+  //   }
 
-    final List<Future> futures = [];
-    final Map<DateTime, List<Map<String, dynamic>>> aulasComDetalhes = {};
+  //   final List<Future> futures = [];
+  //   final Map<DateTime, List<Map<String, dynamic>>> aulasComDetalhes = {};
 
-    for (var entry in _filteredEvents.entries) {
-      for (var aula in entry.value) {
-        futures.add(_getAulaDetails(aula.idaula!).then((detalhes) {
-          aulasComDetalhes.putIfAbsent(entry.key, () => []).add(detalhes);
-        }));
-      }
-    }
+  //   for (var entry in _filteredEvents.entries) {
+  //     for (var aula in entry.value) {
+  //       futures.add(_getAulaDetails(aula.idaula!).then((detalhes) {
+  //         aulasComDetalhes.putIfAbsent(entry.key, () => []).add(detalhes);
+  //       }));
+  //     }
+  //   }
 
-    await Future.wait(futures);
+  //   await Future.wait(futures);
 
-    final Map<String, List<Map<String, dynamic>>> aulasPorUc = {};
-    for (var entry in aulasComDetalhes.entries) {
-      for (var aula in entry.value) {
-        final uc = aula['nome_uc'] as String;
-        aulasPorUc.putIfAbsent(uc, () => []).add(aula);
-      }
-    }
+  //   final Map<String, List<Map<String, dynamic>>> aulasPorUc = {};
+  //   for (var entry in aulasComDetalhes.entries) {
+  //     for (var aula in entry.value) {
+  //       final uc = aula['nome_uc'] as String;
+  //       aulasPorUc.putIfAbsent(uc, () => []).add(aula);
+  //     }
+  //   }
 
-    final diasComAulas = <int>{};
-    for (var data in aulasComDetalhes.keys) {
-      diasComAulas.add(data.weekday);
-    }
+  //   final diasComAulas = <int>{};
+  //   for (var data in aulasComDetalhes.keys) {
+  //     diasComAulas.add(data.weekday);
+  //   }
 
-    final periodoFormatado = _formatarPeriodo(diasComAulas.toList());
+  //   final periodoFormatado = _formatarPeriodo(diasComAulas.toList());
 
-    final ucColors = <String, PdfColor>{};
-    final basicColors = [
-      PdfColors.green,
-      PdfColors.orange,
-      PdfColors.purple,
-      PdfColors.yellow,
-      PdfColors.teal,
-      PdfColors.pink,
-    ];
+  //   final ucColors = <String, PdfColor>{};
+  //   final basicColors = [
+  //     PdfColors.green,
+  //     PdfColors.orange,
+  //     PdfColors.purple,
+  //     PdfColors.yellow,
+  //     PdfColors.teal,
+  //     PdfColors.pink,
+  //   ];
 
-    int colorIndex = 0;
-    for (var uc in aulasPorUc.keys) {
-      ucColors[uc] = basicColors[colorIndex % basicColors.length];
-      colorIndex++;
-    }
+  //   int colorIndex = 0;
+  //   for (var uc in aulasPorUc.keys) {
+  //     ucColors[uc] = basicColors[colorIndex % basicColors.length];
+  //     colorIndex++;
+  //   }
 
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4.landscape,
-        build: (pw.Context context) {
-          return [
-            pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Center(
-                  child: pw.Text('SENAC CATALÃO',
-                      style: pw.TextStyle(
-                          fontSize: 18, fontWeight: pw.FontWeight.bold)),
-                ),
-                pw.SizedBox(height: 10),
-                pw.Row(
-                  children: [
-                    pw.Text('CURSO: ',
-                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                    pw.Text(nomeCurso),
-                  ],
-                ),
-                pw.Row(
-                  children: [
-                    pw.Text('TURMA: ',
-                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                    pw.Text(turmaInfo?['turma'] ?? 'Todas as Turmas'),
-                  ],
-                ),
-                pw.Row(
-                  children: [
-                    pw.Text('PERÍODO: ',
-                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                    pw.Text(periodoFormatado),
-                  ],
-                ),
-                pw.Row(
-                  children: [
-                    pw.Text('HORÁRIO: ',
-                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                    pw.Text(turmaInfo?['horario'] ?? ''),
-                  ],
-                ),
-                pw.SizedBox(height: 20),
-                pw.Center(
-                  child: pw.Text('CRONOGRAMA DE AULAS - ${DateTime.now().year}',
-                      style: pw.TextStyle(
-                          fontSize: 16, fontWeight: pw.FontWeight.bold)),
-                ),
-                pw.SizedBox(height: 20),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildLegendaItem(
-                        'F', 'Feriado', PdfColors.red100, PdfColors.red),
-                    _buildLegendaItem(
-                        'Dom', 'Domingo', PdfColors.red100, PdfColors.red),
-                    _buildLegendaItem('H', 'Aula (horas)', PdfColors.blue100,
-                        PdfColors.blue900),
-                    _buildLegendaItem(
-                        '', 'Dia sem aula', PdfColors.grey200, PdfColors.black),
-                  ],
-                ),
-                pw.SizedBox(height: 20),
-              ],
-            ),
-            for (var mes in _getMesesComAulas(aulasComDetalhes))
-              _buildTabelaMes(mes, aulasPorUc, ucColors),
-          ];
-        },
-      ),
-    );
+  //   pdf.addPage(
+  //     pw.MultiPage(
+  //       pageFormat: PdfPageFormat.a4.landscape,
+  //       build: (pw.Context context) {
+  //         return [
+  //           pw.Column(
+  //             crossAxisAlignment: pw.CrossAxisAlignment.start,
+  //             children: [
+  //               pw.Center(
+  //                 child: pw.Text('SENAC CATALÃO',
+  //                     style: pw.TextStyle(
+  //                         fontSize: 18, fontWeight: pw.FontWeight.bold)),
+  //               ),
+  //               pw.SizedBox(height: 10),
+  //               pw.Row(
+  //                 children: [
+  //                   pw.Text('CURSO: ',
+  //                       style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+  //                   pw.Text(nomeCurso),
+  //                 ],
+  //               ),
+  //               pw.Row(
+  //                 children: [
+  //                   pw.Text('TURMA: ',
+  //                       style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+  //                   pw.Text(turmaInfo?.turmanome ?? 'Todas as Turmas'),
+  //                 ],
+  //               ),
+  //               pw.Row(
+  //                 children: [
+  //                   pw.Text('PERÍODO: ',
+  //                       style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+  //                   pw.Text(periodoFormatado),
+  //                 ],
+  //               ),
+  //               pw.Row(
+  //                 children: [
+  //                   pw.Text('HORÁRIO: ',
+  //                       style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+  //                   pw.Text(turmaInfo?.horario ?? ''),
+  //                 ],
+  //               ),
+  //               pw.SizedBox(height: 20),
+  //               pw.Center(
+  //                 child: pw.Text('CRONOGRAMA DE AULAS - ${DateTime.now().year}',
+  //                     style: pw.TextStyle(
+  //                         fontSize: 16, fontWeight: pw.FontWeight.bold)),
+  //               ),
+  //               pw.SizedBox(height: 20),
+  //               pw.Row(
+  //                 mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
+  //                 children: [
+  //                   _buildLegendaItem(
+  //                       'F', 'Feriado', PdfColors.red100, PdfColors.red),
+  //                   _buildLegendaItem(
+  //                       'Dom', 'Domingo', PdfColors.red100, PdfColors.red),
+  //                   _buildLegendaItem('H', 'Aula (horas)', PdfColors.blue100,
+  //                       PdfColors.blue900),
+  //                   _buildLegendaItem(
+  //                       '', 'Dia sem aula', PdfColors.grey200, PdfColors.black),
+  //                 ],
+  //               ),
+  //               pw.SizedBox(height: 20),
+  //             ],
+  //           ),
+  //           for (var mes in _getMesesComAulas(aulasComDetalhes))
+  //             _buildTabelaMes(mes, aulasPorUc, ucColors),
+  //         ];
+  //       },
+  //     ),
+  //   );
 
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => pdf.save(),
-      usePrinterSettings: true,
-    );
-  }
+  //   await Printing.layoutPdf(
+  //     onLayout: (PdfPageFormat format) async => pdf.save(),
+  //     usePrinterSettings: true,
+  //   );
+  // }
 
-  pw.Widget _buildLegendaItem(
-      String simbolo, String descricao, PdfColor corFundo, PdfColor corTexto) {
-    return pw.Row(
-      children: [
-        pw.Container(
-          width: 20,
-          height: 20,
-          decoration: pw.BoxDecoration(
-            color: corFundo,
-            border: pw.Border.all(),
-          ),
-          child: pw.Center(
-            child: pw.Text(
-              simbolo,
-              style: pw.TextStyle(
-                fontSize: 8,
-                fontWeight: pw.FontWeight.bold,
-                color: corTexto,
-              ),
-            ),
-          ),
-        ),
-        pw.SizedBox(width: 5),
-        pw.Text(
-          descricao,
-          style: const pw.TextStyle(fontSize: 10),
-        ),
-        pw.SizedBox(width: 10),
-      ],
-    );
-  }
+  // pw.Widget _buildLegendaItem(
+  //     String simbolo, String descricao, PdfColor corFundo, PdfColor corTexto) {
+  //   return pw.Row(
+  //     children: [
+  //       pw.Container(
+  //         width: 20,
+  //         height: 20,
+  //         decoration: pw.BoxDecoration(
+  //           color: corFundo,
+  //           border: pw.Border.all(),
+  //         ),
+  //         child: pw.Center(
+  //           child: pw.Text(
+  //             simbolo,
+  //             style: pw.TextStyle(
+  //               fontSize: 8,
+  //               fontWeight: pw.FontWeight.bold,
+  //               color: corTexto,
+  //             ),
+  //           ),
+  //         ),
+  //       ),
+  //       pw.SizedBox(width: 5),
+  //       pw.Text(
+  //         descricao,
+  //         style: const pw.TextStyle(fontSize: 10),
+  //       ),
+  //       pw.SizedBox(width: 10),
+  //     ],
+  //   );
+  // }
 
   String _formatarPeriodo(List<int> diasDaSemana) {
     if (diasDaSemana.isEmpty) return 'Nenhuma aula marcada';
@@ -980,7 +983,8 @@ class _CronogramaPageState extends State<CronogramaPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.print),
-            onPressed: _imprimirCronogramaWindows,
+            // onPressed: _imprimirCronogramaWindows,
+            onPressed: () {},
           ),
           IconButton(
             icon: const Icon(Icons.event),
@@ -1019,13 +1023,13 @@ class _CronogramaPageState extends State<CronogramaPage> {
                       ),
                       ..._turmas.map((turma) {
                         final curso = _cursos.firstWhere(
-                          (c) => c['idCurso'] == turma['idCurso'],
+                          (c) => c['idCurso'] == turma.idcurso,
                           orElse: () => {'nomecurso': 'Curso não encontrado'},
                         );
                         return DropdownMenuItem<int>(
-                          value: turma['idTurma'] as int,
+                          value: turma.idturma as int,
                           child:
-                              Text('${curso['nomecurso']} - ${turma['turma']}'),
+                              Text('${curso['nomecurso']} - ${turma.idturma}'),
                         );
                       }),
                     ],

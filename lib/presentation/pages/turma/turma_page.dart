@@ -1,6 +1,5 @@
 import 'package:cronograma/data/models/cursos_model.dart';
 import 'package:cronograma/data/models/instrutores_model.dart';
-import 'package:cronograma/data/models/turma_com_nomes.dart';
 import 'package:cronograma/data/models/turma_model.dart';
 import 'package:cronograma/data/repositories/cursos_repository.dart';
 import 'package:cronograma/data/repositories/instrutor_repository.dart';
@@ -32,8 +31,8 @@ class _TurmaPageFormState extends State<TurmaPageForm> {
       InstrutoresViewModel(InstrutoresRepository());
 
   bool _isLoading = false;
-  List<TurmaComNomes> _turmaNomes = [];
-  List<TurmaComNomes> _turmasFiltradas = [];
+  List<Turma> _turmaNomes = [];
+  List<Turma> _turmasFiltradas = [];
   final List<String> _turnos = ['Matutino', 'Vespertino', 'Noturno'];
   String? _turnoSelecionado;
   int? _cursoIdSelecionado;
@@ -55,6 +54,7 @@ class _TurmaPageFormState extends State<TurmaPageForm> {
     try {
       final turmasNomes = await _viewModel.getTurmasNomes();
       final cursos = await _cursosViewModel.getCursos();
+      print('turmas: $turmasNomes');
       final instrutores = await _instrutoresViewModel.getInstrutores();
 
       if (mounted) {
@@ -67,7 +67,7 @@ class _TurmaPageFormState extends State<TurmaPageForm> {
           debugPrint(
               'Cursos carregados: ${_cursos.map((c) => '${c.idcurso}:${c.nomeCurso}').toList()}');
           debugPrint(
-              'Turmas carregadas: ${_turmaNomes.map((t) => '${t.idcurso}:${t.nomecurso}').toList()}');
+              'Turmas carregadas: ${_turmaNomes.map((t) => '${t.idcurso}:${t.cursos?.nomeCurso}').toList()}');
 
           if (_cursos.isNotEmpty) {
             _cursoIdSelecionado = _cursos.first.idcurso;
@@ -106,7 +106,8 @@ class _TurmaPageFormState extends State<TurmaPageForm> {
         _turmasFiltradas = List.from(_turmaNomes);
       } else {
         _turmasFiltradas = _turmaNomes
-            .where((turma) => turma.idcurso == _cursoFiltroSelecionado?.idcurso)
+            .where((turma) =>
+                turma.cursos?.idcurso == _cursoFiltroSelecionado?.idcurso)
             .toList();
       }
       debugPrint(
@@ -134,44 +135,45 @@ class _TurmaPageFormState extends State<TurmaPageForm> {
 
     setState(() => _isLoading = true);
 
-    // try {
-    final turnoId = await _turnoViewModel.getTurnoIdByNome(_turnoSelecionado!);
-    if (turnoId == null) throw Exception('Turno não encontrado');
+    try {
+      final turnoId =
+          await _turnoViewModel.getTurnoIdByNome(_turnoSelecionado!);
+      if (turnoId == null) throw Exception('Turno não encontrado');
 
-    final turma = Turma(
-      turmanome: _turmaController.text,
-      idcurso: _cursoIdSelecionado!,
-      idturno: turnoId,
-      idinstrutor: _instrutorIdSelecionado!,
-    );
+      final turma = Turma(
+        turmanome: _turmaController.text,
+        idcurso: _cursoIdSelecionado!,
+        idturno: turnoId,
+        idinstrutor: _instrutorIdSelecionado!,
+      );
 
-    await _viewModel.addTurma(turma);
+      await _viewModel.addTurma(turma);
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Turma cadastrada com sucesso!'),
-        backgroundColor: Colors.green,
-      ),
-    );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Turma cadastrada com sucesso!'),
+          backgroundColor: Colors.green,
+        ),
+      );
 
-    _turmaController.clear();
-    await _carregarDados();
-    // } catch (e) {
-    //   if (!mounted) return;
-    //   ScaffoldMessenger.of(context).showSnackBar(
-    //     SnackBar(
-    //       content: Text('Erro ao cadastrar: ${e.toString()}'),
-    //       backgroundColor: Colors.red,
-    //     ),
-    //   );
-    //   debugPrint('Erro ao cadastrar turma: $e');
-    // } finally {
-    //   if (mounted) {
-    //     setState(() => _isLoading = false);
-    //   }
-    // }
+      _turmaController.clear();
+      await _carregarDados();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao cadastrar: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      debugPrint('Erro ao cadastrar turma: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   Future<void> _editarTurma(Turma turma) async {
@@ -480,14 +482,15 @@ class _TurmaPageFormState extends State<TurmaPageForm> {
                               return Card(
                                 margin: const EdgeInsets.symmetric(vertical: 8),
                                 child: ListTile(
-                                  title: Text(turma.turma),
+                                  title: Text(turma.turmanome),
                                   subtitle: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      Text('Curso: ${turma.nomecurso}'),
-                                      Text('Instrutor: ${turma.nomeinstrutor}'),
-                                      Text('Turno: ${turma.turno}'),
+                                      Text('Curso: ${turma.cursos?.nomeCurso}'),
+                                      Text(
+                                          'Instrutor: ${turma.instrutores?.nomeinstrutor}'),
+                                      Text('Turno: ${turma.turno?.turno}'),
                                     ],
                                   ),
                                   trailing: Row(
@@ -498,7 +501,7 @@ class _TurmaPageFormState extends State<TurmaPageForm> {
                                             color: colorScheme.primary),
                                         onPressed: () => _editarTurma(Turma(
                                           idturma: turma.idturma,
-                                          turmanome: turma.turma,
+                                          turmanome: turma.turmanome,
                                           idcurso: turma.idcurso,
                                           idturno: turma.idturno,
                                           idinstrutor: turma.idinstrutor,
