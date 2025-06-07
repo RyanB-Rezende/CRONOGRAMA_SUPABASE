@@ -4,7 +4,7 @@ class Calendarios {
   final String mes;
   final String dataInicio; // Formato: 'yyyy-MM-dd'
   final String dataFim; // Formato: 'yyyy-MM-dd'
-  final int idTurma;
+  final int idturma;
 
   Calendarios({
     this.idcalendarios,
@@ -12,7 +12,7 @@ class Calendarios {
     required this.mes,
     required this.dataInicio,
     required this.dataFim,
-    required this.idTurma,
+    required this.idturma,
   });
 
   // Adicione este factory constructor para conversão do Map para Objeto
@@ -21,22 +21,26 @@ class Calendarios {
       idcalendarios: map['idcalendarios'] as int?,
       ano: map['ano'] as int,
       mes: map['mes'] as String,
-      dataInicio: map['data_inicio'] as String,
-      dataFim: map['data_fim'] as String,
-      idTurma: map['idturma'] as int,
+      dataInicio: map['datainicio'] as String,
+      dataFim: map['datafim'] as String,
+      idturma: map['idturma'] as int,
     );
   }
 
   // Método para conversão do Objeto para Map
   Map<String, dynamic> toMap() {
-    return {
-      'idcalendarios': idcalendarios,
+    final Map<String, dynamic> map = <String, dynamic>{
       'ano': ano,
       'mes': mes,
       'datainicio': dataInicio,
       'datafim': dataFim,
-      'idturma': idTurma,
+      'idturma': idturma,
     };
+    if (idcalendarios != null) {
+      map['idcalendarios'] = idcalendarios;
+    }
+
+    return map;
   }
 
   // Método opcional para formatação de datas no padrão brasileiro

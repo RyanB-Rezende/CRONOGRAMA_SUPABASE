@@ -3,6 +3,7 @@
 import 'package:cronograma/data/models/aula_model.dart';
 import 'package:cronograma/data/models/turma_model.dart';
 import 'package:cronograma/data/repositories/turma_repository.dart';
+import 'package:cronograma/presentation/pages/Cronograma/agendar_aulas_page.dart';
 import 'package:cronograma/presentation/viewmodels/turma_viewmodels.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,7 +13,6 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:cronograma/presentation/pages/Cronograma/agendar_aulas_page.dart';
 
 import '../../../widgets/feriados_dialog.dart';
 
@@ -35,7 +35,7 @@ class _CronogramaPageState extends State<CronogramaPage> {
   final Map<int, int> _cargaHorariaUc = {};
   List<Turma> _turmas = [];
   List<Map<String, dynamic>> _cursos = [];
-  int? _selectedTurmaId;
+  int? _selectedturmaId;
   final TurmaViewModel _viewModel = TurmaViewModel(TurmaRepository());
 
   final Map<String, Map<String, dynamic>> _periodoConfig = {
@@ -64,7 +64,7 @@ class _CronogramaPageState extends State<CronogramaPage> {
     _selectedDay = now;
     _carregarFeriadosBrasileiros(); // Removido o parâmetro do ano
     _carregarFeriadosMunicipais();
-    _carregarturmas().then((_) => _carregarAulas());
+    _carregarturmas().then((_) => _carregaraula());
     _carregarCargaHorariaUc();
     _carregarCursos();
   }
@@ -74,23 +74,23 @@ class _CronogramaPageState extends State<CronogramaPage> {
       final response =
           await Supabase.instance.client.from('feriadosmunicipais').select();
 
-      final feriados = response as List<dynamic>;
-
-      setState(() {
-        _feriadosMunicipais.clear();
-        for (var feriado in feriados) {
-          try {
-            final dateStr = feriado['data'] as String;
-            final date = dateStr.contains('T')
-                ? DateTime.parse(dateStr).toLocal()
-                : DateTime.parse(dateStr);
-            final normalizedDate = DateTime(date.year, date.month, date.day);
-            _feriadosMunicipais[normalizedDate] = feriado['nome'] as String;
-          } catch (e) {
-            print('Erro ao processar feriado: $e');
+      if (mounted) {
+        setState(() {
+          _feriadosMunicipais.clear();
+          for (final feriado in response) {
+            try {
+              final dateStr = feriado['data'] as String;
+              final date = dateStr.contains('T')
+                  ? DateTime.parse(dateStr).toLocal()
+                  : DateTime.parse(dateStr);
+              final normalizedDate = DateTime(date.year, date.month, date.day);
+              _feriadosMunicipais[normalizedDate] = feriado['nome'] as String;
+            } catch (e) {
+              print('Erro ao processar feriado: $e');
+            }
           }
-        }
-      });
+        });
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -195,27 +195,31 @@ class _CronogramaPageState extends State<CronogramaPage> {
     return DateTime(ano, mes, dia);
   }
 
-  Future<void> _carregarAulas() async {
+  Future<void> _carregaraula() async {
     try {
-      final response = await Supabase.instance.client.from('Aulas').select();
+      final response = await Supabase.instance.client.from('aulas').select();
 
       final Map<DateTime, List<Aulas>> events = {};
-      for (var aula in response as List<dynamic>) {
+
+      for (var aulas in response) {
         try {
-          final date = DateTime.parse(aula['data'] as String);
+          final dateStr = aulas['data'] as String;
+          final date = dateStr.contains('T')
+              ? DateTime.parse(dateStr).toLocal()
+              : DateTime.parse(dateStr);
           final normalizedDate = DateTime(date.year, date.month, date.day);
 
-          final aulaObj = Aulas(
-            idaula: aula['idaula'] as int,
-            iduc: aula['iduc'] as int,
-            idturma: aula['idturma'] as int,
+          final aulasObj = Aulas(
+            idaula: aulas['idaula'] as int,
+            iduc: aulas['iduc'] as int,
+            idturma: aulas['idturma'] as int,
             data: date,
-            horario: aula['horario'] as String,
-            status: aula['status'] as String,
-            horas: aula['horas'] as int? ?? 1,
+            horario: aulas['horario'] as String,
+            status: aulas['status'] as String? ?? 'Agendada',
+            horas: aulas['horas'] as int? ?? 1,
           );
 
-          events.putIfAbsent(normalizedDate, () => []).add(aulaObj);
+          events.putIfAbsent(normalizedDate, () => []).add(aulasObj);
         } catch (e) {
           print('Erro ao processar aula: $e');
         }
@@ -225,7 +229,7 @@ class _CronogramaPageState extends State<CronogramaPage> {
         setState(() {
           _events.clear();
           _events.addAll(events);
-          _aplicarFiltroTurma();
+          _aplicarFiltroturma();
           _isLoading = false;
         });
       }
@@ -233,27 +237,27 @@ class _CronogramaPageState extends State<CronogramaPage> {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao carregar aulas: $e')),
+          SnackBar(content: Text('Erro ao carregar aula: $e')),
         );
       }
     }
   }
 
-  void _aplicarFiltroTurma() {
+  void _aplicarFiltroturma() {
     _filteredEvents.clear();
 
-    if (_selectedTurmaId == null) {
+    if (_selectedturmaId == null) {
       _filteredEvents.addAll(_events);
       return;
     }
 
     for (var entry in _events.entries) {
-      final filteredAulas = entry.value
-          .where((aula) => aula.idturma == _selectedTurmaId)
+      final filteredaulas = entry.value
+          .where((aulas) => aulas.idturma == _selectedturmaId)
           .toList();
 
-      if (filteredAulas.isNotEmpty) {
-        _filteredEvents[entry.key] = filteredAulas;
+      if (filteredaulas.isNotEmpty) {
+        _filteredEvents[entry.key] = filteredaulas;
       }
     }
   }
@@ -267,7 +271,7 @@ class _CronogramaPageState extends State<CronogramaPage> {
       if (mounted) {
         setState(() {
           _cargaHorariaUc.clear();
-          for (var uc in response as List<dynamic>) {
+          for (var uc in response) {
             _cargaHorariaUc[uc['iduc'] as int] =
                 (uc['cargahoraria'] ?? 0) as int;
           }
@@ -294,7 +298,7 @@ class _CronogramaPageState extends State<CronogramaPage> {
     return true;
   }
 
-  Future<void> _adicionarAula() async {
+  Future<void> _adicionarAulas() async {
     try {
       if ((_selectedDays.isEmpty && _selectedDay == null) || !mounted) return;
 
@@ -322,14 +326,14 @@ class _CronogramaPageState extends State<CronogramaPage> {
         context,
         MaterialPageRoute(
           builder: (context) => AgendarAulasPage(
-            selectedDays: diasParaAgendar,
+            selectedDays: diasParaAgendar.toList(),
             periodoConfig: _periodoConfig,
           ),
         ),
       );
 
       if (result == true) {
-        await _carregarAulas();
+        await _carregaraula();
         await _carregarCargaHorariaUc();
 
         if (mounted) {
@@ -338,7 +342,7 @@ class _CronogramaPageState extends State<CronogramaPage> {
             _selectedDay = null;
           });
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Aulas agendadas com sucesso!')),
+            const SnackBar(content: Text('aula agendadas com sucesso!')),
           );
         }
       }
@@ -351,150 +355,151 @@ class _CronogramaPageState extends State<CronogramaPage> {
     }
   }
 
-// Future<void> _imprimirCronogramaWindows() async {
-//   final pdf = pw.Document();
+  // Future<void> _imprimirCronogramaWindows() async {
+  //   final pdf = pw.Document();
 
-//   final turmaInfo = _selectedTurmaId != null
-//       ? _turmas.firstWhere((t) => t.idturma == _selectedTurmaId)
-//       : null;
+  //   final turmaInfo = _selectedturmaId != null
+  //       ? _turmas.firstWhere((t) => t.idturma == _selectedturmaId)
+  //       : null;
 
-//   String nomeCurso = 'Não especificado';
-//   if (turmaInfo != null && turmaInfo.cursos?.idcurso != null) {
-//     try {
-//       final response = await Supabase.instance.client
-//           .from('curso')
-//           .select('nomecurso')
-//           .eq('idcurso', turmaInfo.cursos!.idcurso!)
-//           .limit(1)
-//           .single();
+  //   String nomeCurso = 'Não especificado';
+  //   if (turmaInfo != null && turmaInfo.idcurso != null) {
+  //     try {
+  //       final response = await Supabase.instance.client
+  //           .from('cursos')
+  //           .select('nomecurso')
+  //           .eq('idcurso', turmaInfo.cursos!.idcurso!)
+  //           .limit(1)
+  //           .single();
 
-//       nomeCurso = response['nome_curso'] as String;
-//     } catch (e) {
-//       print('Erro ao buscar curso: $e');
-//     }
-//   }
+  //       nomeCurso = response['nomecurso'] as String;
+  //     } catch (e) {
+  //       print('Erro ao buscar curso no Supabase: $e');
+  //     }
+  //   }
 
-//   final List<Future> futures = [];
-//   final Map<DateTime, List<Map<String, dynamic>>> aulasComDetalhes = {};
+  //   final List<Future> futures = [];
+  //   final Map<DateTime, List<Map<String, dynamic>>> aulasComDetalhes = {};
 
-//   for (var entry in _filteredEvents.entries) {
-//     for (var aula in entry.value) {
-//       futures.add(_getAulaDetails(aula.idaula!).then((detalhes) {
-//         aulasComDetalhes.putIfAbsent(entry.key, () => []).add(detalhes);
-//       }));
-//     }
-//   }
+  //   for (var entry in _filteredEvents.entries) {
+  //     for (var aulas in entry.value) {
+  //       futures.add(_getAulaDetails(aulas.idaula!).then((detalhes) {
+  //         aulasComDetalhes.putIfAbsent(entry.key, () => []).add(detalhes);
+  //       }));
+  //     }
+  //   }
 
-//   await Future.wait(futures);
+  //   await Future.wait(futures);
 
-//   final Map<String, List<Map<String, dynamic>>> aulasPorUc = {};
-//   for (var entry in aulasComDetalhes.entries) {
-//     for (var aula in entry.value) {
-//       final uc = aula['nomeuc'] as String;
-//       aulasPorUc.putIfAbsent(uc, () => []).add(aula);
-//     }
-//   }
+  //   final Map<String, List<Map<String, dynamic>>> aulaPorUc = {};
+  //   for (var entry in aulaComDetalhes.entries) {
+  //     for (var aula in entry.value) {
+  //       final uc = aula['nomeuc'] as String;
+  //       aulaPorUc.putIfAbsent(uc, () => []).add(aula);
+  //     }
+  //   }
 
-//   final diasComAulas = <int>{};
-//   for (var data in aulasComDetalhes.keys) {
-//     diasComAulas.add(data.weekday);
-//   }
+  //   final diasComaulas = <int>{};
+  //   for (var data in aulasComDetalhes.keys) {
+  //     diasComaulas.add(data.weekday);
+  //   }
 
-//   final periodoFormatado = _formatarPeriodo(diasComAulas.toList());
+  //   final periodoFormatado = _formatarPeriodo(diasComaulas.toList());
 
-//   final ucColors = <String, PdfColor>{};
-//   final basicColors = [
-//     PdfColors.green,
-//     PdfColors.orange,
-//     PdfColors.purple,
-//     PdfColors.yellow,
-//     PdfColors.teal,
-//     PdfColors.pink,
-//   ];
+  //   final ucColors = <String, PdfColor>{};
+  //   final basicColors = [
+  //     PdfColors.green,
+  //     PdfColors.orange,
+  //     PdfColors.purple,
+  //     PdfColors.yellow,
+  //     PdfColors.teal,
+  //     PdfColors.pink,
+  //   ];
 
-//   int colorIndex = 0;
-//   for (var uc in aulasPorUc.keys) {
-//     ucColors[uc] = basicColors[colorIndex % basicColors.length];
-//     colorIndex++;
-//   }
+  //   int colorIndex = 0;
+  //   for (var uc in aulasPorUc.keys) {
+  //     ucColors[uc] = basicColors[colorIndex % basicColors.length];
+  //     colorIndex++;
+  //   }
 
-//   pdf.addPage(
-//     pw.MultiPage(
-//       pageFormat: PdfPageFormat.a4.landscape,
-//       build: (pw.Context context) {
-//         return [
-//           pw.Column(
-//             crossAxisAlignment: pw.CrossAxisAlignment.start,
-//             children: [
-//               pw.Center(
-//                 child: pw.Text('SENAC CATALÃO',
-//                     style: pw.TextStyle(
-//                         fontSize: 18, fontWeight: pw.FontWeight.bold)),
-//               ),
-//               pw.SizedBox(height: 10),
-//               pw.Row(
-//                 children: [
-//                   pw.Text('CURSO: ',
-//                       style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-//                   pw.Text(nomeCurso),
-//                 ],
-//               ),
-//               pw.Row(
-//                 children: [
-//                   pw.Text('TURMA: ',
-//                       style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-//                   pw.Text(turmaInfo?.turmanome ?? 'Todas as Turmas'),
-//                 ],
-//               ),
-//               pw.Row(
-//                 children: [
-//                   pw.Text('PERÍODO: ',
-//                       style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-//                   pw.Text(periodoFormatado),
-//                 ],
-//               ),
-//               pw.Row(
-//                 children: [
-//                   pw.Text('HORÁRIO: ',
-//                       style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-//                   pw.Text(turmaInfo?.horario ?? ''),
-//                 ],
-//               ),
-//               pw.SizedBox(height: 20),
-//               pw.Center(
-//                 child: pw.Text('CRONOGRAMA DE AULAS - ${DateTime.now().year}',
-//                     style: pw.TextStyle(
-//                         fontSize: 16, fontWeight: pw.FontWeight.bold)),
-//               ),
-//               pw.SizedBox(height: 20),
-//               pw.Row(
-//                 mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
-//                 children: [
-//                   _buildLegendaItem(
-//                       'F', 'Feriado', PdfColors.red100, PdfColors.red),
-//                   _buildLegendaItem(
-//                       'Dom', 'Domingo', PdfColors.red100, PdfColors.red),
-//                   _buildLegendaItem('H', 'Aula (horas)', PdfColors.blue100,
-//                       PdfColors.blue900),
-//                   _buildLegendaItem(
-//                       '', 'Dia sem aula', PdfColors.grey200, PdfColors.black),
-//                 ],
-//               ),
-//               pw.SizedBox(height: 20),
-//             ],
-//           ),
-//           for (var mes in _getMesesComAulas(aulasComDetalhes))
-//             _buildTabelaMes(mes, aulasPorUc, ucColors),
-//         ];
-//       },
-//     ),
-//   );
+  //   pdf.addPage(
+  //     pw.MultiPage(
+  //       pageFormat: PdfPageFormat.a4.landscape,
+  //       build: (pw.Context context) {
+  //         return [
+  //           pw.Column(
+  //             crossAxisAlignment: pw.CrossAxisAlignment.start,
+  //             children: [
+  //               pw.Center(
+  //                 child: pw.Text('SENAC CATALÃO',
+  //                     style: pw.TextStyle(
+  //                         fontSize: 18, fontWeight: pw.FontWeight.bold)),
+  //               ),
+  //               pw.SizedBox(height: 10),
+  //               pw.Row(
+  //                 children: [
+  //                   pw.Text('CURSO: ',
+  //                       style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+  //                   pw.Text(nomeCurso),
+  //                 ],
+  //               ),
+  //               pw.Row(
+  //                 children: [
+  //                   pw.Text('turma: ',
+  //                       style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+  //                   pw.Text(turmaInfo?.turmanome ?? 'Todas as turmas'),
+  //                 ],
+  //               ),
+  //               pw.Row(
+  //                 children: [
+  //                   pw.Text('PERÍODO: ',
+  //                       style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+  //                   pw.Text(periodoFormatado),
+  //                 ],
+  //               ),
+  //               pw.Row(
+  //                 children: [
+  //                   pw.Text('HORÁRIO: ',
+  //                       style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+  //                   pw.Text(turmaInfo?.horario ?? ''),
+  //                 ],
+  //               ),
+  //               pw.SizedBox(height: 20),
+  //               pw.Center(
+  //                 child: pw.Text('CRONOGRAMA DE aula - ${DateTime.now().year}',
+  //                     style: pw.TextStyle(
+  //                         fontSize: 16, fontWeight: pw.FontWeight.bold)),
+  //               ),
+  //               pw.SizedBox(height: 20),
+  //               pw.Row(
+  //                 mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
+  //                 children: [
+  //                   _buildLegendaItem(
+  //                       'F', 'Feriado', PdfColors.red100, PdfColors.red),
+  //                   _buildLegendaItem(
+  //                       'Dom', 'Domingo', PdfColors.red100, PdfColors.red),
+  //                   _buildLegendaItem('H', 'Aula (horas)', PdfColors.blue100,
+  //                       PdfColors.blue900),
+  //                   _buildLegendaItem(
+  //                       '', 'Dia sem aula', PdfColors.grey200, PdfColors.black),
+  //                 ],
+  //               ),
+  //               pw.SizedBox(height: 20),
+  //             ],
+  //           ),
+  //           for (var mes in _getMesesComaulas(aulasComDetalhes))
+  //             _buildTabelaMes(mes, aulasPorUc, ucColors),
+  //         ];
+  //       },
+  //     ),
+  //   );
 
-//   await Printing.layoutPdf(
-//     onLayout: (PdfPageFormat format) async => pdf.save(),
-//     usePrinterSettings: true,
-//   );
-// }
+  //   await Printing.layoutPdf(
+  //     onLayout: (PdfPageFormat format) async => pdf.save(),
+  //     usePrinterSettings: true,
+  //   );
+  // }
+
   pw.Widget _buildLegendaItem(
       String simbolo, String descricao, PdfColor corFundo, PdfColor corTexto) {
     return pw.Row(
@@ -563,7 +568,7 @@ class _CronogramaPageState extends State<CronogramaPage> {
     return diasDaSemana.map((dia) => diasMap[dia]).join(', ');
   }
 
-  List<DateTime> _getMesesComAulas(
+  List<DateTime> _getMesesComaulas(
       Map<DateTime, List<Map<String, dynamic>>> aulasComDetalhes) {
     final Set<DateTime> meses = {};
     for (var data in aulasComDetalhes.keys) {
@@ -693,11 +698,11 @@ class _CronogramaPageState extends State<CronogramaPage> {
       );
     }
 
-    final aulasDesteDia = aulasPorUc[uc]?.where((aula) {
-      final aulaDate = DateTime.parse(aula['data']);
-      return aulaDate.year == dia.year &&
-          aulaDate.month == dia.month &&
-          aulaDate.day == dia.day;
+    final aulasDesteDia = aulasPorUc[uc]?.where((aulas) {
+      final aulasDate = DateTime.parse(aulas['data']);
+      return aulasDate.year == dia.year &&
+          aulasDate.month == dia.month &&
+          aulasDate.day == dia.day;
     }).toList();
 
     if (aulasDesteDia == null || aulasDesteDia.isEmpty) {
@@ -711,8 +716,8 @@ class _CronogramaPageState extends State<CronogramaPage> {
       );
     }
 
-    final totalHoras = aulasDesteDia.fold<int>(0, (sum, aula) {
-      return sum + (aula['horas'] as int? ?? 0);
+    final totalHoras = aulasDesteDia.fold<int>(0, (sum, aulas) {
+      return sum + (aulas['horas'] as int? ?? 0);
     });
 
     return pw.Container(
@@ -734,50 +739,46 @@ class _CronogramaPageState extends State<CronogramaPage> {
     );
   }
 
-  Future<void> _removerAula(
-      int idAula, int idUc, String horario, int horas) async {
+  Future<void> _removerAulas(
+      int idaula, int idUc, String horario, int horas) async {
     try {
-      // Buscar aula
       final response = await Supabase.instance.client
           .from('aulas')
           .select('horas')
-          .eq('idaula', idAula)
+          .eq('idaula', idaula)
           .limit(1)
-          .maybeSingle();
+          .single();
 
-      if (response == null) {
+      if (response.isEmpty) {
         throw Exception('Aula não encontrada');
       }
 
-      final horasAula =
-          response['horas'] as int? ?? (horario == '19:00-22:00' ? 3 : 4);
-
-      // Remover aula
-      final deleteResponse = await Supabase.instance.client
+      // Deletar a aula
+      await Supabase.instance.client
           .from('aulas')
           .delete()
-          .eq('idaula', idAula);
+          .eq('idaula', idaula);
 
-      if (deleteResponse.error != null) {
-        throw Exception(
-            'Erro ao excluir aula: ${deleteResponse.error!.message}');
-      }
+      final horasParaRestaurar =
+          response['horas'] as int? ?? (horario == '19:00-22:00' ? 3 : 4);
 
-      // Restaurar carga horária da UC
+      // Atualiza estado local
       setState(() {
-        _cargaHorariaUc[idUc] = (_cargaHorariaUc[idUc] ?? 0) + horasAula;
+        _cargaHorariaUc[idUc] =
+            (_cargaHorariaUc[idUc] ?? 0) + horasParaRestaurar;
       });
 
+      // Atualiza no Supabase
       await Supabase.instance.client
           .from('unidades_curriculares')
           .update({'cargahoraria': _cargaHorariaUc[idUc]}).eq('iduc', idUc);
 
       if (mounted) {
-        await _carregarAulas();
+        await _carregaraula();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                'Aula removida com sucesso! ($horasAula horas restauradas)'),
+                'Aula removida com sucesso! ($horasParaRestaurar horas restauradas)'),
             duration: const Duration(seconds: 2),
           ),
         );
@@ -796,7 +797,7 @@ class _CronogramaPageState extends State<CronogramaPage> {
   }
 
   List<Aulas> _getEventsForDay(DateTime day) {
-    if (_selectedTurmaId == null) {
+    if (_selectedturmaId == null) {
       return _events[DateTime(day.year, day.month, day.day)] ?? [];
     } else {
       return _filteredEvents[DateTime(day.year, day.month, day.day)] ?? [];
@@ -862,7 +863,7 @@ class _CronogramaPageState extends State<CronogramaPage> {
             padding: EdgeInsets.all(16),
             child: Text('Nenhuma aula agendada'),
           ),
-        ...events.map((aula) => _buildAulaCard(aula)),
+        ...events.map((aulas) => _buildAulaCard(aulas)),
       ],
     );
   }
@@ -886,7 +887,7 @@ class _CronogramaPageState extends State<CronogramaPage> {
               return const Text('Erro ao carregar dados');
             }
             final data = snapshot.data!;
-            return Text('${data['nome_uc']} - ${data['turma']}');
+            return Text('${data['nomeuc']} - ${data['turma']}');
           },
         ),
         subtitle: Column(
@@ -902,7 +903,7 @@ class _CronogramaPageState extends State<CronogramaPage> {
                   return const Text('Erro ao carregar dados');
                 }
                 final data = snapshot.data!;
-                return Text('Instrutor: ${data['nome_instrutor']}');
+                return Text('Instrutor: ${data['nomeinstrutor']}');
               },
             ),
             Text('Horário: ${aulas.horario}'),
@@ -924,7 +925,7 @@ class _CronogramaPageState extends State<CronogramaPage> {
         ),
         trailing: IconButton(
           icon: const Icon(Icons.delete, color: Colors.red),
-          onPressed: () => _removerAula(
+          onPressed: () => _removerAulas(
               aulas.idaula!, aulas.iduc, aulas.horario, aulas.horas),
         ),
       ),
@@ -942,40 +943,23 @@ class _CronogramaPageState extends State<CronogramaPage> {
     }
   }
 
-  Future<Map<String, dynamic>> _getAulaDetails(int idaula) async {
+  Future<Map<String, dynamic>> _getAulaDetails(int idAula) async {
     try {
-      final response = await Supabase.instance.client.from('Aulas').select('''
-          idaula,
-          horario,
-          status,
-          horas,
-          unidades_curriculares (nomeuc),
-          turma (
-            turma,
-            instrutores (nomeinstrutor)
-          )
-        ''').eq('idaula', idaula).maybeSingle();
-
-      if (response == null) {
-        return {
-          'nomeuc': 'Não encontrado',
-          'turma': 'Não encontrada',
-          'nomeinstrutor': 'Não encontrado',
-          'horario': '',
-          'status': '',
-          'horas': 0
-        };
-      }
+      final response = await Supabase.instance.client.from('aulas').select('''
+          idaula, iduc, idturma, horario, status, horas,
+          unidades_curriculares(nomeuc),
+          turma(turma, instrutor(nomeinstrutor))
+        ''').eq('idaula', idAula).single();
 
       return {
         'nomeuc':
-            response['unidades_curriculares']?['nomeuc'] ?? 'Não encontrado',
-        'turma': response['turma']?['turma'] ?? 'Não encontrada',
-        'nomeinstrutor': response['turma']?['instrutores']?['nomeinstrutor'] ??
-            'Não encontrado',
+            response['unidades_curriculares']['nomeuc'] ?? 'Não encontrado',
+        'turma': response['turma']['turma'] ?? 'Não encontrada',
+        'nomeinstrutor':
+            response['turma']['instrutor']['nomeinstrutor'] ?? 'Não encontrado',
         'horario': response['horario'] ?? '',
         'status': response['status'] ?? '',
-        'horas': response['horas'] ?? 0
+        'horas': response['horas'] ?? 0,
       };
     } catch (e) {
       return {
@@ -995,7 +979,7 @@ class _CronogramaPageState extends State<CronogramaPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Cronograma de Aulas'),
+        title: const Text('Cronograma de aula'),
         actions: [
           IconButton(
             icon: const Icon(Icons.print),
@@ -1009,8 +993,8 @@ class _CronogramaPageState extends State<CronogramaPage> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _adicionarAula,
-        tooltip: 'Agendar aulas',
+        onPressed: _adicionarAulas,
+        tooltip: 'Agendar aula',
         child: const Icon(Icons.add),
       ),
       body: _isLoading
@@ -1021,9 +1005,9 @@ class _CronogramaPageState extends State<CronogramaPage> {
                   padding: const EdgeInsets.all(12.0),
                   child: DropdownButtonFormField<int>(
                     isExpanded: true,
-                    value: _selectedTurmaId,
+                    value: _selectedturmaId,
                     decoration: InputDecoration(
-                      labelText: 'Filtrar por Turma',
+                      labelText: 'Filtrar por turma',
                       prefixIcon:
                           Icon(Icons.filter_list, color: colorScheme.primary),
                       border: const OutlineInputBorder(),
@@ -1035,24 +1019,24 @@ class _CronogramaPageState extends State<CronogramaPage> {
                     items: [
                       const DropdownMenuItem<int>(
                         value: null,
-                        child: Text('Todas as Turmas'),
+                        child: Text('Todas as turmas'),
                       ),
                       ..._turmas.map((turma) {
                         final curso = _cursos.firstWhere(
-                          (c) => c['idCurso'] == turma.cursos?.idcurso,
-                          orElse: () => {'nome_curso': 'Curso não encontrado'},
+                          (c) => c['idcurso'] == turma.idcurso,
+                          orElse: () => {'nomecurso': 'Curso não encontrado'},
                         );
                         return DropdownMenuItem<int>(
-                          value: turma['idturma'] as int,
-                          child: Text(
-                              '${curso['nome_curso']} - ${turma['turma']}'),
+                          value: turma.idturma as int,
+                          child:
+                              Text('${curso['nomecurso']} - ${turma.idturma}'),
                         );
                       }),
                     ],
                     onChanged: (value) {
                       setState(() {
-                        _selectedTurmaId = value;
-                        _aplicarFiltroTurma();
+                        _selectedturmaId = value;
+                        _aplicarFiltroturma();
                       });
                     },
                   ),

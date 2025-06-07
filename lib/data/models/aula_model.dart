@@ -1,4 +1,4 @@
-class Aula {
+class Aulas {
   final int? idaula;
   final int iduc;
   final int idturma;
@@ -7,7 +7,7 @@ class Aula {
   final String status;
   final int horas; // Adicione este campo
 
-  Aula({
+  Aulas({
     this.idaula,
     required this.iduc,
     required this.idturma,
@@ -17,8 +17,8 @@ class Aula {
     required this.horas, // Adicione este parâmetro
   });
 
-  factory Aula.fromMap(Map<String, dynamic> map) {
-    return Aula(
+  factory Aulas.fromMap(Map<String, dynamic> map) {
+    return Aulas(
       idaula: map['idaula'] as int?,
       iduc: map['iduc'] as int,
       idturma: map['idturma'] as int,

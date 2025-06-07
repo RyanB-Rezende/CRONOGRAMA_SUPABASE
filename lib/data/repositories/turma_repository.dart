@@ -27,7 +27,7 @@ class TurmaRepository {
     try {
       final response = await SupabaseHelper.client
           .from('turma')
-          .select('*, cursos(*), instrutores(*), turno(*), aula(*)');
+          .select('*, cursos(*), instrutores(*), turno(*)');
 
       print(
           'Response formatado: ${const JsonEncoder.withIndent('  ').convert(response)}');

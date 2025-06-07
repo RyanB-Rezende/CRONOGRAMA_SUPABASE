@@ -7,11 +7,11 @@ class CalendariosRepository {
     try {
       final data = {
         ...calendario.toMap(),
-        'data_inicio': calendario.dataInicio,
-        'data_fim': calendario.dataFim,
+        'datainicio': calendario.dataInicio,
+        'datafim': calendario.dataFim,
       };
 
-      await SupabaseHelper.client.from('Calendarios').insert(data);
+      await SupabaseHelper.client.from('calendarios').insert(data);
     } catch (e) {
       throw Exception('Erro ao inserir calendário: $e');
     }
@@ -23,7 +23,7 @@ class CalendariosRepository {
       final response = await SupabaseHelper.client
           .from('Calendarios')
           .select()
-          .order('data_inicio');
+          .order('datainicio');
       return (response as List).map((map) {
         return Calendarios.fromMap(map as Map<String, dynamic>);
       }).toList();
@@ -37,12 +37,12 @@ class CalendariosRepository {
     try {
       final data = {
         ...calendario.toMap(),
-        'data_inicio': calendario.dataInicio,
-        'data_fim': calendario.dataFim,
+        'datainicio': calendario.dataInicio,
+        'datafim': calendario.dataFim,
       };
 
       await SupabaseHelper.client
-          .from('Calendarios')
+          .from('calendarios')
           .update(data)
           .eq('idcalendarios', calendario.idcalendarios as Object);
     } catch (e) {
@@ -54,7 +54,7 @@ class CalendariosRepository {
   Future<void> deleteCalendario(int id) async {
     try {
       await SupabaseHelper.client
-          .from('Calendarios')
+          .from('calendarios')
           .delete()
           .eq('idcalendarios', id);
     } catch (e) {
@@ -63,13 +63,13 @@ class CalendariosRepository {
   }
 
   // Buscar calendários por turma
-  Future<List<Calendarios>> getCalendariosPorTurma(int idTurma) async {
+  Future<List<Calendarios>> getCalendariosPorTurma(int idturma) async {
     try {
       final response = await SupabaseHelper.client
-          .from('Calendarios')
+          .from('calendarios')
           .select()
-          .eq('idturma', idTurma)
-          .order('data_inicio');
+          .eq('idturma', idturma)
+          .order('datainicio');
 
       return (response as List).map((map) {
         return Calendarios.fromMap(map as Map<String, dynamic>);

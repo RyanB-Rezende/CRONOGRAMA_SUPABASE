@@ -1,212 +1,355 @@
+// ignore_for_file: library_private_types_in_public_api
+
+import 'package:cronograma/data/models/aula_model.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class AgendarAulasPage extends StatefulWidget {
-  final List<DateTime> selectedDays;
+class AdicionarAulaDialog extends StatefulWidget {
+  final List<Map<String, dynamic>> turmas;
+  final List<Map<String, dynamic>> ucs;
+  final Map<int, int> cargaHorariaUc;
+  final Set<DateTime> selectedDays;
+  final Map<DateTime, List<Aulas>> events;
   final Map<String, Map<String, dynamic>> periodoConfig;
 
-  const AgendarAulasPage({
+  const AdicionarAulaDialog({
     super.key,
+    required this.turmas,
+    required this.ucs,
+    required this.cargaHorariaUc,
     required this.selectedDays,
+    required this.events,
     required this.periodoConfig,
   });
 
   @override
-  // ignore: library_private_types_in_public_api
-  _AgendarAulasPageState createState() => _AgendarAulasPageState();
+  _AdicionarAulaDialogState createState() => _AdicionarAulaDialogState();
 }
 
-class _AgendarAulasPageState extends State<AgendarAulasPage> {
-  String _periodo = 'Manhã';
-  int _horasAula = 1;
+class _AdicionarAulaDialogState extends State<AdicionarAulaDialog> {
   int? _selectedTurmaId;
   int? _selectedUcId;
-  bool _isLoading = false;
-
-  List<Map<String, dynamic>> _turmas = [];
-  List<Map<String, dynamic>> _ucs = [];
+  String _periodo = 'Matutino';
+  int _horasAula = 1;
   List<Map<String, dynamic>> _ucsFiltradas = [];
-  final Map<int, int> _cargaHorariaUc = {};
-
-  @override
-  void initState() {
-    super.initState();
-    _carregarDados();
-  }
-
-  Future<void> _carregarDados() async {
-    setState(() => _isLoading = true);
-    try {
-      final client = Supabase.instance.client;
-
-      final turmasResponse = await client.from('Turma').select();
-      final ucsResponse = await client.from('unidades_curriculares').select();
-
-      final cargaHorariaMap = <int, int>{};
-      for (var uc in ucsResponse) {
-        cargaHorariaMap[uc['iduc'] as int] = (uc['cargahoraria'] ?? 0) as int;
-      }
-
-      if (mounted) {
-        setState(() {
-          _turmas = List<Map<String, dynamic>>.from(turmasResponse);
-          _ucs = List<Map<String, dynamic>>.from(ucsResponse);
-          _ucsFiltradas = [];
-          _cargaHorariaUc.addAll(cargaHorariaMap);
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao carregar dados: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  bool _podeSalvar() {
-    return _selectedTurmaId != null && _selectedUcId != null && _horasAula > 0;
-  }
-
-  Future<void> _salvarAulas() async {
-    if (!_podeSalvar()) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      final client = Supabase.instance.client;
-      final cargaTotalNecessaria = _horasAula * widget.selectedDays.length;
-
-      if ((_cargaHorariaUc[_selectedUcId] ?? 0) < cargaTotalNecessaria) {
-        throw Exception('Carga horária insuficiente para esta UC');
-      }
-
-      final inserts = widget.selectedDays.map((dia) {
-        return {
-          'iduc': _selectedUcId,
-          'idturma': _selectedTurmaId,
-          'data': DateFormat('yyyy-MM-dd').format(dia),
-          'horario': widget.periodoConfig[_periodo]!['horario'],
-          'status': 'Agendada',
-          'horas': _horasAula,
-        };
-      }).toList();
-
-      final insertResponse = await client.from('Aulas').insert(inserts);
-      if (insertResponse.error != null) throw insertResponse.error!;
-
-      final novaCarga =
-          (_cargaHorariaUc[_selectedUcId] ?? 0) - cargaTotalNecessaria;
-
-      final updateResponse = await client
-          .from('unidades_curriculares')
-          .update({'cargahoraria': novaCarga}).eq('iduc', _selectedUcId!);
-
-      if (updateResponse.error != null) throw updateResponse.error!;
-
-      if (mounted) Navigator.pop(context, true);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao agendar aulas: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        setState(() => _isLoading = false);
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Agendar Aulas'),
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(16.0),
+    final maxHoras = widget.periodoConfig[_periodo]!['maxHoras'] as int;
+    final theme = Theme.of(context);
+
+    return Dialog(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Dropdown de Turma
+            DropdownButtonFormField<int>(
+              value: _selectedTurmaId,
+              decoration: _buildInputDecoration('turma', Icons.group),
+              items: widget.turmas.map((turma) {
+                return DropdownMenuItem<int>(
+                  value: turma['idturma'] as int,
+                  child:
+                      _buildDropdownItem(turma['turma'] as String, Icons.group),
+                );
+              }).toList(),
+              onChanged: (value) async {
+                if (value == null) return;
+
+                final response = await Supabase.instance.client
+                    .from('turma')
+                    .select()
+                    .eq('idturma', value)
+                    .single();
+
+                final turma = response;
+
+                if (mounted) {
+                  setState(() {
+                    _selectedTurmaId = value;
+                    _selectedUcId = null;
+                    _ucsFiltradas = widget.ucs
+                        .where((uc) => uc['idcurso'] == turma['idcurso'])
+                        .toList();
+                  });
+                }
+              },
+            ),
+
+            const SizedBox(height: 20),
+
+            // Dropdown de Unidade Curricular
+            DropdownButtonFormField<int>(
+              value: _selectedUcId,
+              decoration:
+                  _buildInputDecoration('Unidade Curricular', Icons.school),
+              items: _ucsFiltradas.map((uc) {
+                final cargaHoraria =
+                    widget.cargaHorariaUc[uc['iduc'] as int] ?? 0;
+                final podeAgendar = cargaHoraria >= _horasAula;
+                final jaAgendada = widget.selectedDays.any((day) {
+                  return widget.events[DateTime(day.year, day.month, day.day)]
+                          ?.any((aulas) => aulas.iduc == uc['iduc']) ??
+                      false;
+                });
+
+                return DropdownMenuItem<int>(
+                  value: uc['iduc'] as int,
+                  enabled: podeAgendar && !jaAgendada,
+                  child: _buildUcItem(uc, cargaHoraria, jaAgendada),
+                );
+              }).toList(),
+              onChanged: (value) {
+                if (mounted) {
+                  setState(() => _selectedUcId = value);
+                }
+              },
+            ),
+
+            const SizedBox(height: 20),
+
+            // Dropdown de Período
+            DropdownButtonFormField<String>(
+              value: _periodo,
+              decoration: _buildInputDecoration('Período', Icons.schedule),
+              items: widget.periodoConfig.keys.map((periodo) {
+                final bool podeAgendar;
+                if (_selectedUcId == null) {
+                  podeAgendar = true;
+                } else {
+                  final cargaHoraria =
+                      widget.cargaHorariaUc[_selectedUcId] ?? 0;
+                  podeAgendar = cargaHoraria >= _horasAula;
+                }
+
+                return DropdownMenuItem<String>(
+                  value: periodo,
+                  enabled: podeAgendar,
+                  child: _buildDropdownItem(
+                    periodo,
+                    widget.periodoConfig[periodo]!['icon'] as IconData,
+                  ),
+                );
+              }).toList(),
+              onChanged: (String? novoPeriodo) {
+                if (novoPeriodo == null || !mounted) return;
+
+                final config = widget.periodoConfig[novoPeriodo];
+                if (config == null) return;
+
+                final maxHoras = config['maxHoras'] is int
+                    ? config['maxHoras'] as int
+                    : 1; // Valor padrão seguro
+
+                if (_horasAula > maxHoras) {
+                  setState(() {
+                    _periodo = novoPeriodo;
+                    _horasAula = maxHoras;
+                  });
+                } else {
+                  setState(() => _periodo = novoPeriodo);
+                }
+              },
+            ),
+
+            const SizedBox(height: 20),
+
+            // Seletor de horas
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  DropdownButtonFormField<int>(
-                    decoration: const InputDecoration(labelText: 'Turma'),
-                    value: _selectedTurmaId,
-                    items: _turmas.map((turma) {
-                      return DropdownMenuItem<int>(
-                        value: turma['idturma'],
-                        child: Text(turma['nome']),
-                      );
-                    }).toList(),
-                    onChanged: (value) async {
-                      if (value == null) return;
-                      final client = Supabase.instance.client;
-                      final response = await client
-                          .from('Turma')
-                          .select()
-                          .eq('idturma', value)
-                          .single();
+                  Text('Horas por aula:', style: theme.textTheme.bodyLarge),
+                  Slider(
+                    value: _horasAula.toDouble(),
+                    min: 1,
+                    max: maxHoras.toDouble(),
+                    divisions: maxHoras - 1,
+                    label: '$_horasAula hora${_horasAula > 1 ? 's' : ''}',
+                    onChanged: (value) {
                       if (mounted) {
-                        setState(() {
-                          _selectedTurmaId = value;
-                          _selectedUcId = null;
-                          _ucsFiltradas = _ucs
-                              .where(
-                                  (uc) => uc['idcurso'] == response['idcurso'])
-                              .toList();
-                        });
+                        setState(() => _horasAula = value.toInt());
                       }
                     },
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<int>(
-                    decoration:
-                        const InputDecoration(labelText: 'Unidade Curricular'),
-                    value: _selectedUcId,
-                    items: _ucsFiltradas.map((uc) {
-                      return DropdownMenuItem<int>(
-                        value: uc['iduc'],
-                        child: Text(uc['nome']),
-                      );
-                    }).toList(),
-                    onChanged: (value) => setState(() => _selectedUcId = value),
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(labelText: 'Período'),
-                    value: _periodo,
-                    items: widget.periodoConfig.keys.map((periodo) {
-                      return DropdownMenuItem<String>(
-                        value: periodo,
-                        child: Text(periodo),
-                      );
-                    }).toList(),
-                    onChanged: (value) => setState(() => _periodo = value!),
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    decoration:
-                        const InputDecoration(labelText: 'Horas por aula'),
-                    initialValue: '1',
-                    keyboardType: TextInputType.number,
-                    onChanged: (value) => _horasAula = int.tryParse(value) ?? 1,
-                  ),
-                  const Spacer(),
-                  ElevatedButton(
-                    onPressed: _podeSalvar() ? _salvarAulas : null,
-                    child: const Text('Agendar'),
                   ),
                 ],
               ),
             ),
+
+            if (widget.selectedDays.length > 1) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Dias selecionados (${widget.selectedDays.length}):',
+                        style: theme.textTheme.bodyLarge),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: widget.selectedDays.map((day) {
+                        return Chip(
+                          label: Text(DateFormat('dd/MM').format(day)),
+                          backgroundColor: theme.colorScheme.primaryContainer,
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            if (_selectedUcId != null) ...[
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline,
+                            color: theme.colorScheme.primary),
+                        const SizedBox(width: 8),
+                        Text('Informações da UC',
+                            style: theme.textTheme.titleSmall),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _buildInfoRow('Carga horária restante:',
+                        '${widget.cargaHorariaUc[_selectedUcId] ?? 0} horas'),
+                    _buildInfoRow(
+                        'Horas por aula:', '$_horasAula (máx. $maxHoras)'),
+                    _buildInfoRow('Total de horas:',
+                        '${_horasAula * widget.selectedDays.length}',
+                        isBold: true),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('CANCELAR'),
+                ),
+                const SizedBox(width: 16),
+                ElevatedButton(
+                  onPressed: _podeSalvar() ? _salvar : null,
+                  child: const Text('SALVAR'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
+  }
+
+  InputDecoration _buildInputDecoration(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    );
+  }
+
+  Widget _buildDropdownItem(String text, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 20),
+          const SizedBox(width: 12),
+          Text(text),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUcItem(
+      Map<String, dynamic> uc, int cargaHoraria, bool jaAgendada) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(uc['nomeuc'] as String,
+            style: const TextStyle(fontWeight: FontWeight.w500)),
+        const SizedBox(height: 4),
+        Text('Carga restante: $cargaHoraria horas',
+            style: TextStyle(
+                color: cargaHoraria < _horasAula ? Colors.red : null)),
+        if (jaAgendada)
+          const Text('Já possui aula agendada',
+              style: TextStyle(color: Colors.orange)),
+      ],
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value, {bool isBold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Text(label, style: TextStyle(color: Colors.grey.shade700)),
+          const SizedBox(width: 8),
+          Text(value,
+              style: TextStyle(fontWeight: isBold ? FontWeight.bold : null)),
+        ],
+      ),
+    );
+  }
+
+  bool _podeSalvar() {
+    // 1. Verificação básica de campos obrigatórios
+    if (_selectedTurmaId == null || _selectedUcId == null) {
+      return false;
+    }
+
+    // 2. Cálculo da carga horária
+    final cargaDisponivel = widget.cargaHorariaUc[_selectedUcId] ?? 0;
+    final cargaNecessaria = _horasAula * widget.selectedDays.length;
+
+    // 3. Verificação de conflitos de agendamento
+    bool temConflito = false;
+    for (final day in widget.selectedDays) {
+      final diaNormalizado = DateTime(day.year, day.month, day.day);
+      final aulasNoDia = widget.events[diaNormalizado] ?? [];
+      if (aulasNoDia.any((aulas) => aulas.iduc == _selectedUcId)) {
+        temConflito = true;
+        break;
+      }
+    }
+
+    // 4. Retorno final com condições explícitas
+    final bool temCargaSuficiente = cargaDisponivel >= cargaNecessaria;
+    final bool semConflitos = !temConflito;
+
+    return temCargaSuficiente && semConflitos;
+  }
+
+  void _salvar() {
+    if (_selectedUcId == null || _selectedTurmaId == null || !mounted) return;
+
+    Navigator.of(context).pop({
+      'idturma': _selectedTurmaId,
+      'iduc': _selectedUcId,
+      'periodo': _periodo,
+      'horas': _horasAula,
+      'horario': widget.periodoConfig[_periodo]!['horario'],
+      'dias': widget.selectedDays,
+    });
   }
 }

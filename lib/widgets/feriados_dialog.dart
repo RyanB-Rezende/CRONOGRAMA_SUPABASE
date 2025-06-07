@@ -157,7 +157,7 @@ class _FeriadosDialogState extends State<FeriadosDialog> {
     try {
       final formattedDate = DateFormat('yyyy-MM-dd').format(data);
       final response = await supabase
-          .from('FeriadosMunicipais')
+          .from('feriadosmunicipais')
           .delete()
           .eq('data', formattedDate)
           .eq('nome', nome);
@@ -235,7 +235,7 @@ class _FeriadosDialogState extends State<FeriadosDialog> {
 
                 try {
                   final response =
-                      await supabase.from('FeriadosMunicipais').insert({
+                      await supabase.from('feriadosmunicipais').insert({
                     'data':
                         DateFormat('yyyy-MM-dd').format(selectedDateFeriado!),
                     'nome': feriadoMunicipalController.text,

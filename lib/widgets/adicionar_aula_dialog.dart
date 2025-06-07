@@ -8,7 +8,7 @@ class AdicionarAulaDialog extends StatefulWidget {
   final List<Map<String, dynamic>> ucs;
   final Map<int, int> cargaHorariaUc;
   final Set<DateTime> selectedDays;
-  final Map<DateTime, List<Aula>> events;
+  final Map<DateTime, List<Aulas>> events;
   final Map<String, Map<String, dynamic>> periodoConfig;
 
   const AdicionarAulaDialog({
@@ -49,7 +49,7 @@ class _AdicionarAulaDialogState extends State<AdicionarAulaDialog> {
             // Dropdown de Turma
             DropdownButtonFormField<int>(
               value: _selectedTurmaId,
-              decoration: _buildInputDecoration('Turma', Icons.group),
+              decoration: _buildInputDecoration('turma', Icons.group),
               items: widget.turmas.map((turma) {
                 return DropdownMenuItem<int>(
                   value: turma['idturma'] as int,
@@ -61,7 +61,7 @@ class _AdicionarAulaDialogState extends State<AdicionarAulaDialog> {
                 if (value == null) return;
 
                 final response = await supabase
-                    .from('Turma')
+                    .from('turma')
                     .select()
                     .eq('idturma', value)
                     .maybeSingle();
@@ -86,7 +86,7 @@ class _AdicionarAulaDialogState extends State<AdicionarAulaDialog> {
             DropdownButtonFormField<int>(
               value: _selectedUcId,
               decoration:
-                  _buildInputDecoration('Unidade Curricular', Icons.school),
+                  _buildInputDecoration('unidade_curricular', Icons.school),
               items: _ucsFiltradas.map((uc) {
                 final cargaHoraria =
                     widget.cargaHorariaUc[uc['iduc'] as int] ?? 0;
