@@ -197,7 +197,7 @@ class _CronogramaPageState extends State<CronogramaPage> {
 
   Future<void> _carregarAulas() async {
     try {
-      final response = await Supabase.instance.client.from('Aulas').select();
+      final response = await Supabase.instance.client.from('aulas').select();
 
       final Map<DateTime, List<Aulas>> events = {};
       for (var aula in response as List<dynamic>) {
@@ -942,40 +942,23 @@ class _CronogramaPageState extends State<CronogramaPage> {
     }
   }
 
-  Future<Map<String, dynamic>> _getAulaDetails(int idaula) async {
+  Future<Map<String, dynamic>> _getAulaDetails(int idAula) async {
     try {
-      final response = await Supabase.instance.client.from('Aulas').select('''
-          idaula,
-          horario,
-          status,
-          horas,
-          unidades_curriculares (nomeuc),
-          turma (
-            turma,
-            instrutores (nomeinstrutor)
-          )
-        ''').eq('idaula', idaula).maybeSingle();
-
-      if (response == null) {
-        return {
-          'nomeuc': 'Não encontrado',
-          'turma': 'Não encontrada',
-          'nomeinstrutor': 'Não encontrado',
-          'horario': '',
-          'status': '',
-          'horas': 0
-        };
-      }
+      final response = await Supabase.instance.client.from('aulas').select('''
+          idaula, iduc, idturma, horario, status, horas,
+          unidades_curriculares(nomeuc),
+          turma(turma, instrutor(nomeinstrutor))
+        ''').eq('idaula', idAula).single();
 
       return {
         'nomeuc':
-            response['unidades_curriculares']?['nomeuc'] ?? 'Não encontrado',
-        'turma': response['turma']?['turma'] ?? 'Não encontrada',
-        'nomeinstrutor': response['turma']?['instrutores']?['nomeinstrutor'] ??
-            'Não encontrado',
+            response['unidades_curriculares']['nomeuc'] ?? 'Não encontrado',
+        'turma': response['turma']['turma'] ?? 'Não encontrada',
+        'nomeinstrutor':
+            response['turma']['instrutor']['nomeinstrutor'] ?? 'Não encontrado',
         'horario': response['horario'] ?? '',
         'status': response['status'] ?? '',
-        'horas': response['horas'] ?? 0
+        'horas': response['horas'] ?? 0,
       };
     } catch (e) {
       return {
@@ -1039,13 +1022,13 @@ class _CronogramaPageState extends State<CronogramaPage> {
                       ),
                       ..._turmas.map((turma) {
                         final curso = _cursos.firstWhere(
-                          (c) => c['idCurso'] == turma.cursos?.idcurso,
-                          orElse: () => {'nome_curso': 'Curso não encontrado'},
+                          (c) => c['idcurso'] == turma.cursos?.idcurso,
+                          orElse: () => {'nomecurso': 'Curso não encontrado'},
                         );
                         return DropdownMenuItem<int>(
-                          value: turma['idturma'] as int,
+                          value: turma.idturma as int,
                           child: Text(
-                              '${curso['nome_curso']} - ${turma['turma']}'),
+                              '${curso['nome_curso']} - ${turma.turmanome}'),
                         );
                       }),
                     ],

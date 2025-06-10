@@ -1,8 +1,6 @@
 import 'package:cronograma/core/supabase_helper.dart';
-import 'package:cronograma/data/models/instrutores_model.dart';
 import 'package:cronograma/presentation/pages/Cronograma/cronograma_page.dart';
 import 'package:cronograma/presentation/pages/Instrutores/instrutor_page_form.dart';
-import 'package:cronograma/presentation/pages/main_home_page.dart';
 import 'package:cronograma/presentation/pages/splash_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
